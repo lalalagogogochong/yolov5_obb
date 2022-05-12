@@ -11,20 +11,16 @@ import argparse
 import shutil
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--json_path', default='runs/val/exp/last_predictions.json',type=str, help="input: coco format(json)")
-parser.add_argument('--save_path', default='runs/val/exp/last_predictions_Txt', type=str, help="specify where to save the output dir of labels")
+parser.add_argument('--json_path', default='/home/yolov5_obb_bruce/runs/val/exp11/best_obb_predictions.json',type=str, help="input: coco format(json)")
+parser.add_argument('--save_path', default='/home/yolov5_obb_bruce/runs/val/exp11/last_predictions_Txt', type=str, help="specify where to save the output dir of labels")
 arg = parser.parse_args()
 
 # For DOTA-v2.0
-dotav2_classnames = [ 'plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship',
-         'tennis-court', 'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor',
-         'swimming-pool', 'helicopter', 'container-crane', 'airport', 'helipad']
+dotav2_classnames = ['truck', 'bus', 'car','van','feright']
 # For DOTA-v1.5
-dotav15_classnames = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
-            'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter', 'container-crane']
+dotav15_classnames = ['truck', 'bus', 'car','van','feright']
 # For DOTA-v1.0
-datav1_classnames = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
-            'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter']
+datav1_classnames = ['truck', 'bus', 'car','van','feright']
 
 DOTA_CLASSES = dotav15_classnames
 if __name__ == '__main__':

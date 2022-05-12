@@ -239,9 +239,7 @@ def main():
     annopath = r'/dataset/Dota/Dota_V2.0/val/labelTxt-v2.0/Val_Task2_gt/{:s}.txt'# change the directory to the path of val/labelTxt, if you want to do evaluation on the valset
     imagesetfile = r'tools/parse_pkl/evaluation_results/imgnamefile_val2.0.txt'
 
-    classnames = [ 'plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship',
-         'tennis-court', 'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor',
-         'swimming-pool', 'helicopter', 'container-crane', 'airport', 'helipad']
+    classnames = ['truck', 'bus', 'car','van','feright']
     classaps = []
     map = 0
     for classname in classnames:

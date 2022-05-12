@@ -29,7 +29,7 @@ from models.common import DetectMultiBackend
 from utils.callbacks import Callbacks
 from utils.datasets import create_dataloader
 from utils.general import (LOGGER, box_iou, check_dataset, check_img_size, check_requirements, check_yaml,
-                           coco80_to_coco91_class, colorstr, increment_path, non_max_suppression, print_args,
+                           coco80_to_coco91_class, colorstr, increment_path, non_max_suppression_obb_kld, print_args,
                            scale_coords, scale_polys, xywh2xyxy, xyxy2xywh, non_max_suppression_obb)
 from utils.metrics import ConfusionMatrix, ap_per_class
 from utils.plots import output_to_target, plot_images, plot_val_study
@@ -51,7 +51,7 @@ def save_one_json(pred_hbbn, pred_polyn, jdict, path, class_map):
     """
     Save one JSON result {"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236, "poly": [...]}
     Args:
-        pred_hbbn (tensor): (n, [poly, conf, cls]) 
+        pred_hbbn (tensor): (n, [poly, conf, cls])
         pred_polyn (tensor): (n, [xyxy, conf, cls])
     """
     image_id = int(path.stem) if path.stem.isnumeric() else path.stem
@@ -59,7 +59,7 @@ def save_one_json(pred_hbbn, pred_polyn, jdict, path, class_map):
     box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
     for p, b in zip(pred_polyn.tolist(), box.tolist()):
         jdict.append({'image_id': image_id,
-                      'category_id': class_map[int(p[-1]) + 1], # COCO's category_id start from 1, not 0
+                      'category_id': class_map[int(p[-1]) + 1],  # COCO's category_id start from 1, not 0
                       'bbox': [round(x, 1) for x in b],
                       'score': round(p[-2], 5),
                       'poly': [round(x, 1) for x in p[:8]],
@@ -203,15 +203,16 @@ def run(data,
         lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
         t3 = time_sync()
         # out = non_max_suppression(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=single_cls)
-        out = non_max_suppression_obb(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=single_cls) # list*(n, [cxcylsθ, conf, cls]) θ ∈ [-pi/2, pi/2)
+        out = non_max_suppression_obb_kld(out, conf_thres, iou_thres, labels=lb, multi_label=True,
+                                      agnostic=single_cls)  # list*(n, [cxcylsθ, conf, cls]) θ ∈ [-pi/2, pi/2)
         dt[2] += time_sync() - t3
 
         # Metrics
-        for si, pred in enumerate(out): # pred (tensor): (n, [cxcylsθ, conf, cls])
-            labels = targets[targets[:, 0] == si, 1:7] # labels (tensor):(n_gt, [clsid cx cy l s theta]) θ[-pi/2, pi/2)
+        for si, pred in enumerate(out):  # pred (tensor): (n, [cxcylsθ, conf, cls])
+            labels = targets[targets[:, 0] == si, 1:7]  # labels (tensor):(n_gt, [clsid cx cy l s theta]) θ[-pi/2, pi/2)
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
-            path, shape = Path(paths[si]), shapes[si][0] # shape (tensor): (h_raw, w_raw)
+            path, shape = Path(paths[si]), shapes[si][0]  # shape (tensor): (h_raw, w_raw)
             seen += 1
 
             if len(pred) == 0:
@@ -223,22 +224,21 @@ def run(data,
             if single_cls:
                 # pred[:, 5] = 0
                 pred[:, 6] = 0
-            poly = rbox2poly(pred[:, :5]) # (n, 8)
-            pred_poly = torch.cat((poly, pred[:, -2:]), dim=1) # (n, [poly, conf, cls])
-            hbbox = xywh2xyxy(poly2hbb(pred_poly[:, :8])) # (n, [x1 y1 x2 y2])
-            pred_hbb = torch.cat((hbbox, pred_poly[:, -2:]), dim=1) # (n, [xyxy, conf, cls]) 
+            poly = rbox2poly(pred[:, :5])  # (n, 8)
+            pred_poly = torch.cat((poly, pred[:, -2:]), dim=1)  # (n, [poly, conf, cls])
+            hbbox = xywh2xyxy(poly2hbb(pred_poly[:, :8]))  # (n, [x1 y1 x2 y2])
+            pred_hbb = torch.cat((hbbox, pred_poly[:, -2:]), dim=1)  # (n, [xyxy, conf, cls])
 
-            pred_polyn = pred_poly.clone() # predn (tensor): (n, [poly, conf, cls])
+            pred_polyn = pred_poly.clone()  # predn (tensor): (n, [poly, conf, cls])
             scale_polys(im[si].shape[1:], pred_polyn[:, :8], shape, shapes[si][1])  # native-space pred
-            hbboxn = xywh2xyxy(poly2hbb(pred_polyn[:, :8])) # (n, [x1 y1 x2 y2])
-            pred_hbbn = torch.cat((hbboxn, pred_polyn[:, -2:]), dim=1) # (n, [xyxy, conf, cls]) native-space pred
-            
+            hbboxn = xywh2xyxy(poly2hbb(pred_polyn[:, :8]))  # (n, [x1 y1 x2 y2])
+            pred_hbbn = torch.cat((hbboxn, pred_polyn[:, -2:]), dim=1)  # (n, [xyxy, conf, cls]) native-space pred
 
             # Evaluate
             if nl:
                 # tbox = xywh2xyxy(labels[:, 1:5])  # target boxes
-                tpoly = rbox2poly(labels[:, 1:6]) # target poly
-                tbox = xywh2xyxy(poly2hbb(tpoly)) # target  hbb boxes [xyxy]
+                tpoly = rbox2poly(labels[:, 1:6])  # target poly
+                tbox = xywh2xyxy(poly2hbb(tpoly))  # target  hbb boxes [xyxy]
                 scale_coords(im[si].shape[1:], tbox, shape, shapes[si][1])  # native-space labels
                 labels_hbbn = torch.cat((labels[:, 0:1], tbox), 1)  # native-space labels (n, [cls xyxy])
                 correct = process_batch(pred_hbbn, labels_hbbn, iouv)
@@ -247,13 +247,14 @@ def run(data,
             else:
                 correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool)
             # stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))  # (correct, conf, pcls, tcls)
-            stats.append((correct.cpu(), pred_poly[:, 8].cpu(), pred_poly[:, 9].cpu(), tcls))  # (correct, conf, pcls, tcls)
+            stats.append(
+                (correct.cpu(), pred_poly[:, 8].cpu(), pred_poly[:, 9].cpu(), tcls))  # (correct, conf, pcls, tcls)
 
             # Save/log
-            if save_txt: # just save hbb pred results!
+            if save_txt:  # just save hbb pred results!
                 save_one_txt(pred_hbbn, save_conf, shape, file=save_dir / 'labels' / (path.stem + '.txt'))
                 # LOGGER.info('The horizontal prediction results has been saved in txt, which format is [cls cx cy w h /conf/]')
-            if save_json: # save hbb pred results and poly pred results.
+            if save_json:  # save hbb pred results and poly pred results.
                 save_one_json(pred_hbbn, pred_polyn, jdict, path, class_map)  # append to COCO-JSON dictionary
                 # LOGGER.info('The hbb and obb results has been saved in json file')
             callbacks.run('on_val_image_end', pred_hbb, pred_hbbn, path, names, im[si])
@@ -303,7 +304,8 @@ def run(data,
         LOGGER.info(f'\nEvaluating pycocotools mAP... saving {pred_json}...')
         with open(pred_json, 'w') as f:
             json.dump(jdict, f)
-            LOGGER.info('---------------------The hbb and obb results has been saved in json file-----------------------')
+            LOGGER.info(
+                '---------------------The hbb and obb results has been saved in json file-----------------------')
 
         try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
             check_requirements(['pycocotools'])
@@ -336,7 +338,8 @@ def run(data,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default=ROOT / 'data/yolov5obb_demo_split.yaml', help='dataset.yaml path')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/exp18/weights/best.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/exp27/weights/best.pt',
+                        help='model.pt path(s)')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=1024, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.01, help='confidence threshold')
@@ -369,8 +372,9 @@ def main(opt):
 
     if opt.task in ('train', 'val', 'test'):  # run normally
         # if opt.conf_thres > 0.001:  # https://github.com/ultralytics/yolov5/issues/1466
-        if opt.conf_thres > 0.01:  
-            LOGGER.info(f'WARNING: In oriented detection, confidence threshold {opt.conf_thres} >> 0.001 will produce invalid mAP values.')
+        if opt.conf_thres > 0.01:
+            LOGGER.info(
+                f'WARNING: In oriented detection, confidence threshold {opt.conf_thres} >> 0.001 will produce invalid mAP values.')
         run(**vars(opt))
 
     else:

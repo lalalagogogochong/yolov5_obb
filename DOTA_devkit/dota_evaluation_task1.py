@@ -278,9 +278,9 @@ def image2txt(srcpath, dstpath):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test (and eval) a model')
-    parser.add_argument('--detpath', default='work_dirs/swin_tiny_patch4_window7_dotav2/Task1_results/Task1_{:s}.txt', help='test config file path')
-    parser.add_argument('--annopath', default='data/dataset_demo/labelTxt/{:s}.txt', help='checkpoint file')
-    parser.add_argument('--imagesetfile', default='data/dataset_demo/imgnamefile_demo.txt', help='checkpoint file')
+    parser.add_argument('--detpath', default='/home/yolov5_obb_bruce/runs/val/exp11/last_predictions_Txt/Task1_{:s}.txt', help='test config file path')
+    parser.add_argument('--annopath', default='/home/DroneVehicleDataNoEdgeAll/val/labelTxt/{:s}.txt', help='checkpoint file')
+    parser.add_argument('--imagesetfile', default='/home/DroneVehicleDataNoEdgeAll/val/imgnamefile.txt', help='checkpoint file')
     args = parser.parse_args()
     return args
 
@@ -292,9 +292,7 @@ def main():
     imagesetfile = args.imagesetfile
     
     # For DOTA-v2.0
-    classnames = [ 'plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship',
-         'tennis-court', 'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor',
-         'swimming-pool', 'helicopter', 'container-crane', 'airport', 'helipad']
+    classnames = ['truck', 'bus', 'car','van','feright']
     # For DOTA-v1.5
     # classnames = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
     #             'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter', 'container-crane']

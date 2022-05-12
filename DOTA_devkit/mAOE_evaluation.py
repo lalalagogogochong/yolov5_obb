@@ -179,8 +179,7 @@ def main():
     imagesetfile = r'/data1/OrientedRepPoints/tools/parse_pkl/evaluation_results/imgnamefile_val1.0.txt'
     
     # For DOTA-v1.0
-    classnames = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
-                'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter']
+    classnames = ['truck', 'bus', 'car','van','feright']
     
     # for hrsc2016
     # classnames = ['ship']

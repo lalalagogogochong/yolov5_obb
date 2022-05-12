@@ -199,7 +199,7 @@ class LoadImages:
         if self.video_flag[self.count]:
             # Read video
             self.mode = 'video'
-            ret_val, img0 = self.cap.read()
+            ret_val, img0 =  self.cap.read()
             while not ret_val:
                 self.count += 1
                 self.cap.release()

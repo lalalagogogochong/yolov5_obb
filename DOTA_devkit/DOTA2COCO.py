@@ -5,15 +5,11 @@ import json
 from PIL import Image
 import os.path as osp
 
-wordname_15 = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
-               'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter']
+wordname_15 = ['truck', 'bus', 'car','van','feright']
 
-wordname_16 = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
-               'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter', 'container-crane']
+wordname_16 = ['truck', 'bus', 'car','van','feright']
                
-wordname_18 = [ 'plane', 'baseball-diamond', 'bridge', 'ground-track-field', 'small-vehicle', 'large-vehicle', 'ship',
-         'tennis-court', 'basketball-court', 'storage-tank',  'soccer-ball-field', 'roundabout', 'harbor',
-         'swimming-pool', 'helicopter', 'container-crane', 'airport', 'helipad']
+wordname_18 = ['truck', 'bus', 'car','van','feright']
                
 hrsc_2016 = ['ship']
 ucas_aod = ['car', 'airplane']

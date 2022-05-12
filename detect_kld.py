@@ -16,102 +16,25 @@ import argparse
 import os
 import sys
 from pathlib import Path
-import numpy as np
+
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
 
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
-# matplotlib.get_backend()
+
 from models.common import DetectMultiBackend
 from utils.datasets import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, non_max_suppression_obb, print_args, scale_coords, scale_polys, strip_optimizer, xyxy2xywh)
+                           increment_path, non_max_suppression_obb_kld, non_max_suppression_obb, print_args, scale_coords, scale_polys, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 from utils.rboxs_utils import poly2rbox, rbox2poly
-#
-def grid_gray_image(imgs, each_row: int):
-    '''
-    imgs shape: batch * size (e.g., 64x32x32, 64 is the number of the gray images, and (32, 32) is the size of each gray image)
-    '''
-    row_num = imgs.shape[0]//each_row
-    for i in range(row_num):
-        img = imgs[i*each_row]
-        img = (img - img.min()) / (img.max() - img.min())
-        for j in range(1, each_row):
-            tmp_img = imgs[i*each_row+j]
-            tmp_img = (tmp_img - tmp_img.min()) / (tmp_img.max() - tmp_img.min())
-            img = np.hstack((img, tmp_img))
-        if i == 0:
-            ans = img
-        else:
-            ans = np.vstack((ans, img))
-    return ans
 
-def featuremap_2_heatmap(feature_map):
-    assert isinstance(feature_map, torch.Tensor)
-    feature_map = feature_map.detach()
-    heatmap = feature_map[:,0,:,:]*0
-    heatmaps = []
-    for c in range(feature_map.shape[1]):
-        heatmap+=feature_map[:,c,:,:]
-    heatmap = heatmap.cpu().numpy()
-    heatmap = np.mean(heatmap, axis=0)
-
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= np.max(heatmap)
-    heatmaps.append(heatmap)
-
-    return heatmaps
-def draw_feature_map(features,save_dir = '/home/yolov5_obb_bruce/visual_feature',name = None):
-    i=0
-    if isinstance(features,torch.Tensor):
-        for heat_maps in features:
-            heat_maps=heat_maps.unsqueeze(0)
-            heatmaps = featuremap_2_heatmap(heat_maps)
-            # 这里的h,w指的是你想要把特征图resize成多大的尺寸
-            # heatmap = cv2.resize(heatmap, (h, w))
-            for heatmap in heatmaps:
-                heatmap = np.uint8(255 * heatmap)
-                # 下面这行将热力图转换为RGB格式 ，如果注释掉就是灰度图
-                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-                superimposed_img = heatmap
-                plt.imshow(superimposed_img,cmap='gray')
-                plt.show()
-    else:
-        a = -1
-        for i , featuremap in enumerate(features):
-
-            heatmaps = featuremap_2_heatmap(featuremap)
-            # if i in [0,1,3,4,6,7,9,10]:
-            #     continue
-            # a += 1
-            # heatmaps = featuremap.numpy()
-            for heatmap in heatmaps:
-                # heatmap = (heatmap-heatmap.min())/(heatmap.max()-heatmap.min())
-                heatmap = np.uint8(255 * heatmap)  # 将热力图转换为RGB格式
-                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-                # superimposed_img = heatmap * 0.5 + img*0.3
-                superimposed_img = heatmap
-                plt.title(name[i%len(name)])
-                plt.imshow(superimposed_img[...,::-1])
-                plt.show()
-                plt.savefig(os.path.join(save_dir, name[i%len(name)] +'.jpg'))
-                # plt.imsave()
-                # 下面这些是对特征图进行保存，使用时取消注释
-                # cv2.imshow("1",superimposed_img)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
-                # cv2.imwrite(os.path.join(save_dir, 'rpn_cls'+ str(i) +'.jpg'), superimposed_img)
-                # i=i+1
 
 @torch.no_grad()
 def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
@@ -129,7 +52,7 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         classes=None,  # filter by class: --class 0, or --class 0 2 3
         agnostic_nms=False,  # class-agnostic NMS
         augment=False,  # augmented inference
-        visualize=True,  # visualize features
+        visualize=False,  # visualize features
         update=False,  # update all models
         project=ROOT / 'runs/detect',  # save results to project/name
         name='exp',  # save results to project/name
@@ -152,34 +75,9 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
-    class SaveOutput:
-        def __init__(self):
-            self.outputs = []
-
-        def __call__(self, module, module_in, module_out):
-            self.outputs.append(module_out)
-
-        def clear(self):
-            self.outputs = []
-
-    save_output = SaveOutput()
-    hook_handles = []
     # Load model
-    # from utils.feature_visual import draw_feature_map
     device = select_device(device)
     model = DetectMultiBackend(weights, device=device, dnn=dnn)
-    layer_name = [
-        # model.model.model[17].m[1].cv2.act,
-        # model.model.model[20].m[1].cv2.act,
-        # model.model.model[23].m[1].cv2.act,
-        # model.model.model[9].m[1].cv2.act,
-        # model.model.model[6].m[1].cv2.act,
-        # model.model.model[4].m[1].cv2.act
-        model.model.model[24].m[0]
-        ]
-    for layer in layer_name:
-        handle = layer.register_forward_hook(save_output)
-        hook_handles.append(handle)
     stride, names, pt, jit, onnx, engine = model.stride, model.names, model.pt, model.jit, model.onnx, model.engine
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
@@ -214,24 +112,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
         # Inference
         visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-        save_output.clear()
         pred = model(im, augment=augment, visualize=visualize)
-        name = [
-                # 'model.model.model[17].m[1].cv2.act',
-                # 'model.model.model[20].m[1].cv2.act',
-                # 'model.model.model[23].m[1].cv2.act',
-                # 'model.model.model[9].m[1].cv2.act',
-                # 'model.model.model[6].m[1].cv2.act',
-                # 'model.model.model[4].m[1].cv2.act'
-            'model.model.model[24].m[0]'
-                ]
-        draw_feature_map(save_output.outputs, name=name)
         t3 = time_sync()
         dt[1] += t3 - t2
 
         # NMS
         # pred: list*(n, [cxcylsθ, conf, cls]) θ ∈ [-pi/2, pi/2)
-        pred = non_max_suppression_obb(pred, conf_thres, iou_thres, classes, agnostic_nms, multi_label=True, max_det=max_det)
+        pred = non_max_suppression_obb_kld(pred, conf_thres, iou_thres, classes, agnostic_nms, multi_label=True, max_det=max_det)
         dt[2] += time_sync() - t3
 
         # Second-stage classifier (optional)
@@ -323,13 +210,13 @@ def run(weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/exp18/weights/best.pt', help='model path(s)')
-    parser.add_argument('--source', type=str, default='/home/DroneVehicleDataNoEdgeAll/video/images/20201127_DJI_0014_000495.jpg', help='file/dir/URL/glob, 0 for webcam')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/yolov5m_finetune/weights/best.pt', help='model path(s)')
+    parser.add_argument('--source', type=str, default='dataset/dataset_demo_rate1.0_split1024_gap200/images/', help='file/dir/URL/glob, 0 for webcam')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[1024], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.3, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.4, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--device', default='3', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='1', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', action='store_true', help='show results')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
